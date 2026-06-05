@@ -29,12 +29,10 @@ export default defineConfig(({ mode }) => ({
     })
   ],
   resolve: {
-    alias:
-      mode === 'development'
-        ? {
-            '@dsz-examaware/player': path.resolve(__dirname, '../player/src/index.ts')
-          }
-        : undefined
+    alias: {
+      '@dsz-examaware/player': path.resolve(__dirname, '../player/src/index.ts'),
+      '@dsz-examaware/core': path.resolve(__dirname, '../core/src/index.ts')
+    }
   },
   server: {
     port: 5173
