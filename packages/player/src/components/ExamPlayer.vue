@@ -3,35 +3,116 @@
     <!-- 背景渐变椭圆 -->
     <div class="background-ellipse"></div>
 
-    <!-- 主要内容（可插拔卡片区域） -->
+    <!-- 主要内容 -->
     <div class="content-wrapper">
-      <!-- 左侧列（默认布局） -->
-      <div class="left-column">
-        <slot name="left:logo">
-          <div class="logo-container"><span class="logo-text">DSZ ExamAware 知试</span></div>
-        </slot>
-
-        <slot name="left:title">
-          <div class="title-section">
-            <h1 ref="mainTitleRef" class="main-title">
-              {{ playerExamConfig?.examName || '考试' }}
-            </h1>
-            <p ref="subtitleRef" class="subtitle">
-              {{ playerExamConfig?.message || '请遵守考场纪律' }}
-            </p>
-          </div>
-        </slot>
-
-        <div class="card-item"><component :is="resolvedCards.clock" /></div>
-        <div class="card-item">
-          <component :is="resolvedCards.examInfo" />
+      <!-- 顶部标题栏 -->
+      <div class="top-header">
+        <div class="header-left">
+          <h1 ref="mainTitleRef" class="main-title">
+            {{ playerExamConfig?.examName || '考试' }}
+          </h1>
+          <p ref="subtitleRef" class="subtitle">
+            {{ playerExamConfig?.message || '请遵守考场纪律' }}
+          </p>
+        </div>
+        <div class="header-right">
+          <ExamRoomNumber :room-number="effectiveRoomNumber" @click="handleRoomNumberClick" />
         </div>
       </div>
 
-      <!-- 右侧列（默认布局） -->
-      <div class="right-column">
-        <div class="card-item"><component :is="resolvedCards.room" /></div>
-        <div class="card-item"><component :is="resolvedCards.list" /></div>
+      <!-- 中间区域：北京时间 + 倒计时 -->
+      <div class="middle-section">
+        <div class="clock-area">
+          <div class="clock-label">北京时间</div>
+          <div class="time-display">{{ formattedCurrentTime }}</div>
+          <div class="countdown-display">
+            <span v-if="examStatus?.status === 'pending'">考前倒计时 {{ remainingTime }}</span>
+            <span v-else-if="examStatus?.status === 'inProgress'"
+              >考试倒计时 {{ remainingTime }}</span
+            >
+            <span v-else>考试已结束</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 底部区域：左右分栏 -->
+      <div class="bottom-section">
+        <!-- 左侧：当前考试信息 -->
+        <div class="bottom-left">
+          <BaseCard custom-class="current-exam-card">
+            <div class="current-exam-content">
+              <div class="info-row">
+                <span class="info-label">当前科目：</span>
+                <span class="info-value">{{ currentExamName }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">考试时间：</span>
+                <span class="info-value">{{ currentExamTimeRange }}</span>
+              </div>
+              <div class="info-row">
+                <span class="info-label">考试状态：</span>
+                <span class="info-value" :class="statusClass">{{ examStatusText }}</span>
+              </div>
+
+              <!-- 考试材料数量控制 -->
+              <div v-if="currentExam?.materials?.length" class="materials-section">
+                <div
+                  v-for="(material, idx) in currentExam.materials"
+                  :key="material.name"
+                  class="material-row"
+                >
+                  <span class="info-label">{{ material.name }}：</span>
+                  <div class="material-control">
+                    <span class="material-text">共</span>
+                    <div class="number-box">
+                      <button class="num-btn" @click="decreaseMaterial(idx, 'pages')">-</button>
+                      <span class="num-value">{{ materialPages[idx] ?? 1 }}</span>
+                      <button class="num-btn" @click="increaseMaterial(idx, 'pages')">+</button>
+                    </div>
+                    <span class="material-text">页</span>
+                    <span class="material-text">共</span>
+                    <div class="number-box">
+                      <button class="num-btn" @click="decreaseMaterial(idx, 'quantity')">-</button>
+                      <span class="num-value">{{
+                        materialQuantities[idx] ?? material.quantity
+                      }}</span>
+                      <button class="num-btn" @click="increaseMaterial(idx, 'quantity')">+</button>
+                    </div>
+                    <span class="material-text">张</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </BaseCard>
+        </div>
+
+        <!-- 右侧：考试列表表格 -->
+        <div class="bottom-right">
+          <BaseCard custom-class="exam-list-card">
+            <div class="exam-table-header">
+              <span>日期</span>
+              <span>科目</span>
+              <span>开始时间</span>
+              <span>结束时间</span>
+              <span>考试状态</span>
+            </div>
+            <div class="exam-table-body">
+              <div
+                v-for="exam in displayFormattedExamInfos"
+                :key="exam.name"
+                class="exam-table-row"
+                :class="{ 'exam-active': exam.status === 'inProgress' }"
+              >
+                <span>{{ exam.date }}</span>
+                <span>{{ exam.name }}</span>
+                <span>{{ exam.timeRange.split(' ~ ')[0] }}</span>
+                <span>{{ exam.timeRange.split(' ~ ')[1] }}</span>
+                <span :class="`status-${exam.status}`">{{ exam.statusText }}</span>
+              </div>
+              <div v-if="!displayFormattedExamInfos?.length" class="empty-state">暂无考试安排</div>
+            </div>
+          </BaseCard>
+        </div>
       </div>
     </div>
 
@@ -54,7 +135,7 @@
       @dev-reminder-hide="handleDevReminderHide"
     />
 
-    <!-- 彩色提醒：用于考试开始/即将结束/考试结束，淡入动画 -->
+    <!-- 彩色提醒 -->
     <transition name="fade-soft">
       <div
         v-if="colorfulVisible"
@@ -66,7 +147,7 @@
       </div>
     </transition>
 
-    <!-- 普通提醒：全屏高斯模糊遮罩 + Markdown 内容 + 关闭按钮（含倒计时） -->
+    <!-- 普通提醒 -->
     <transition name="fade-soft">
       <div v-if="currentNotice" class="overlay notice-overlay">
         <div class="notice-card">
@@ -78,7 +159,7 @@
       </div>
     </transition>
 
-    <!-- 考场号设置弹窗（TDesign Dialog） -->
+    <!-- 考场号设置弹窗 -->
     <t-dialog
       header="设置考场号"
       v-model:visible="showRoomNumberModal"
@@ -97,14 +178,12 @@
       </template>
     </t-dialog>
 
-    <!-- 自定义插槽用于额外内容 -->
     <slot name="extra"></slot>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch, watchEffect, provide } from 'vue';
-// 为避免 SFC 类型解析跨包问题，这里使用本地最小类型定义
 type ExamConfig = {
   examName: string;
   message: string;
@@ -114,88 +193,48 @@ import { useExamPlayer, type TimeProvider } from '../useExamPlayer';
 import type { PlayerConfig, PlayerEventHandlers } from '../types';
 import 'simple-keyboard/build/css/index.css';
 import BaseCard from './BaseCard.vue';
-import InfoCardWithIcon from './InfoCardWithIcon.vue';
-import InfoItem from './InfoItem.vue';
 import ExamRoomNumber from './ExamRoomNumber.vue';
-import CurrentExamInfo from './CurrentExamInfo.vue';
-import ClockCard from './cards/ClockCard.vue';
-import ExamInfoCard from './cards/ExamInfoCard.vue';
-import ExamRoomCard from './cards/ExamRoomCard.vue';
-import CurrentListCard from './cards/CurrentListCard.vue';
 import ActionButtonBar from './ActionButtonBar.vue';
 import { providePlayerToolbar } from '../composables/usePlayerToolbar';
-// 本地引入 TDesign 组件，确保不依赖宿主全局注册
 import { Dialog as TDialog, Input as TInput, Button as TButton } from 'tdesign-vue-next';
 import { useReminderService, ReminderUtils } from '../utils/reminderService';
 
-// 轻量 Markdown 渲染器：使用浏览器原生实现，避免引入重依赖
-// 支持少量常见标记：# 标题、**加粗**、*斜体*、`行内代码`、换行
 const renderMarkdownLight = (md: string): string => {
   let html = md;
-  // 转义基础字符以避免注入
   html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  // 标题（仅支持 # 与 ##）
   html = html.replace(/^##\s+(.+)$/gm, '<h2>$1</h2>');
   html = html.replace(/^#\s+(.+)$/gm, '<h1>$1</h1>');
-  // 加粗与斜体
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-  // 代码
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-  // 换行
   html = html.replace(/\n/g, '<br/>');
   return html;
 };
 
-// 根容器，用于就近设置 CSS 变量，避免继承/作用域导致的失效
 const rootRef = ref<HTMLElement | null>(null);
 
-// 工具栏注册器（供外部动态扩展按钮）
 const toolbarRegistry = providePlayerToolbar();
 const toolbarTools = toolbarRegistry.tools;
 
-// Props 定义
 type UIDensity = 'comfortable' | 'cozy' | 'compact';
 
 interface Props {
-  /** 考试配置 */
   examConfig: ExamConfig | null;
-  /** 播放器配置 */
   config?: PlayerConfig;
-  /** 初始界面缩放倍数 */
   uiScale?: number;
-  /** UI 密度 */
   uiDensity?: UIDensity;
-  /** 本场考试信息是否使用大字体 */
   examInfoLargeFont?: boolean;
-  /** 时间提供者 */
   timeProvider?: TimeProvider;
-  /** 时间同步状态描述 */
   timeSyncStatus?: string;
-  /** 考场号 */
   roomNumber?: string;
-  /** 是否显示操作栏 */
   showActionBar?: boolean;
-  /** HDR 高亮提醒（仅对白色文字生效） */
   hdrHighlight?: boolean;
-  /** 是否启用大时钟样式 */
   largeClock?: boolean;
-  /** 大时钟字号缩放 */
   largeClockScale?: number;
-  /** 是否允许编辑考场号 */
   allowEditRoomNumber?: boolean;
-  /** 事件处理器 */
   eventHandlers?: PlayerEventHandlers;
-  /** 可插拔卡片：替换默认卡片组件 */
-  cards?: Partial<{
-    clock: any;
-    examInfo: any;
-    room: any;
-    list: any;
-  }>;
 }
 
-// Events 定义
 interface Emits {
   (e: 'roomNumberClick'): void;
   (e: 'roomNumberChange', roomNumber: string): void;
@@ -228,7 +267,6 @@ const props = withDefaults(defineProps<Props>(), {
   largeClock: false,
   allowEditRoomNumber: true,
   eventHandlers: () => ({}),
-  cards: () => ({}),
   uiDensity: 'comfortable'
 });
 
@@ -262,31 +300,21 @@ const showExamReminder = (
   showColorfulOnce(`${kind}:${examKey}`, options);
 };
 
-// 显式注册局部组件（<t-dialog> / <t-input>）
-// 在 <script setup> 中，import 即可自动可用，但为兼容性，保留命名引用
-const TDialogComp = TDialog;
-const TInputComp = TInput;
-const TButtonComp = TButton;
-
-// 合并事件处理器
 const mergedEventHandlers: PlayerEventHandlers = {
   ...props.eventHandlers,
   onExamStart: (exam: any) => {
     props.eventHandlers?.onExamStart?.(exam);
     emit('examStart', exam);
-    // 考试开始（绿色）
     showExamReminder('start', exam, { title: '考试开始', themeBaseColor: '#2ecc71' });
   },
   onExamEnd: (exam: any) => {
     props.eventHandlers?.onExamEnd?.(exam);
     emit('examEnd', exam);
-    // 考试结束（红色）
     showExamReminder('end', exam, { title: '考试结束', themeBaseColor: '#ff3b30' });
   },
   onExamAlert: (exam: any, alertTime: number) => {
     props.eventHandlers?.onExamAlert?.(exam, alertTime);
     emit('examAlert', exam, alertTime);
-    // 考试即将结束（黄色）
     showExamReminder('alert', exam, {
       title: '考试即将结束',
       themeBaseColor: '#f1c40f',
@@ -339,15 +367,13 @@ watch(
   }
 );
 
-// 使用播放器逻辑 - 初始化时传入配置
 const examPlayer = useExamPlayer(
-  props.examConfig, // 直接传入考试配置
+  props.examConfig,
   props.config || { roomNumber: props.roomNumber || '01' },
   props.timeProvider || { getCurrentTime: () => Date.now() },
   mergedEventHandlers
 );
 
-// 监听 props 变化并更新播放器
 watch(
   () => props.examConfig,
   (newConfig) => {
@@ -414,7 +440,6 @@ watch(
   () => props.config,
   (newConfig) => {
     // 当 config 变化时，需要重新初始化 examPlayer
-    // 这里可以添加配置更新逻辑
   },
   { deep: true }
 );
@@ -423,7 +448,6 @@ watch(
   () => props.timeProvider,
   (newTimeProvider) => {
     if (newTimeProvider) {
-      // 更新时间提供器
       examPlayer.taskQueue.stop();
       examPlayer.taskQueue.start();
     }
@@ -431,7 +455,6 @@ watch(
   { deep: true }
 );
 
-// 从 examPlayer 解构需要的数据
 const {
   state,
   examConfig: playerExamConfig,
@@ -503,8 +526,6 @@ const handleDevReminderHide = () => {
   reminder.hideColorfulAlert();
 };
 
-// === 提醒服务 ===
-// colorful 提醒派生
 const colorfulVisible = reminder.isColorfulVisible;
 const colorfulTitle = computed(() => reminder._colorfulReminder.value?.title || '提示');
 const colorfulOverlayStyle = computed(() => {
@@ -525,24 +546,17 @@ const colorfulHdrActive = computed(() => {
   return Boolean(reminder._colorfulReminder.value?.forceWhiteText);
 });
 
-// 普通通知派生
 const currentNotice = computed(() => reminder.currentNotice.value);
 const renderedMarkdown = computed(() =>
   currentNotice.value ? renderMarkdownLight(currentNotice.value.markdown) : ''
 );
 const handleCloseNotice = () => reminder.closeCurrentNotice('manual');
 
-// 可插拔卡片：注册与上下文将在依赖项声明后注入（见下文）
-
-// 将 API 暴露给父组件，便于外部触发
 defineExpose({
-  // 彩色提醒（新）
   showColorfulAlert: reminder.showColorfulAlert,
   hideColorfulAlert: reminder.hideColorfulAlert,
-  // 兼容旧名
   showEndingAlert: reminder.showEndingAlert,
   hideEndingAlert: reminder.hideEndingAlert,
-  // 普通提醒
   notify: reminder.notify,
   closeCurrentNotice: reminder.closeCurrentNotice,
   clearAllNotices: reminder.clearAllNotices,
@@ -553,8 +567,6 @@ defineExpose({
   }
 });
 
-// 与考试事件联动：当 onExamAlert 触发时，自动弹出“即将结束”提醒
-// 使用配置中的 alertTime（分钟）阈值，避免依赖剩余时间字符串。
 let hasShownEndingForExamId: string | null = null;
 watch(
   () => examStatus.value?.timeRemaining,
@@ -563,7 +575,7 @@ watch(
     if (typeof remainingMs !== 'number') return;
 
     const alertMinutes = Number(currentExam.value.alertTime);
-    if (!Number.isFinite(alertMinutes) || alertMinutes <= 0) return; // 未配置则不触发
+    if (!Number.isFinite(alertMinutes) || alertMinutes <= 0) return;
 
     const examId = currentExam.value?.id || currentExam.value?.name;
     const minutesLeft = remainingMs / (1000 * 60);
@@ -613,7 +625,58 @@ watch(
   { immediate: true }
 );
 
-// === 考场号设置相关状态 ===
+// === 考试状态文本 ===
+const examStatusText = computed(() => {
+  switch (examStatus.value?.status) {
+    case 'pending':
+      return '未开始';
+    case 'inProgress':
+      return '进行中';
+    case 'completed':
+      return '已结束';
+    default:
+      return '暂无安排';
+  }
+});
+
+const statusClass = computed(() => {
+  switch (examStatus.value?.status) {
+    case 'pending':
+      return 'status-pending';
+    case 'inProgress':
+      return 'status-ongoing';
+    case 'completed':
+      return 'status-finished';
+    default:
+      return '';
+  }
+});
+
+// === 材料数量控制 ===
+const materialPages = ref<Record<number, number>>({});
+const materialQuantities = ref<Record<number, number>>({});
+
+const increaseMaterial = (idx: number, type: 'pages' | 'quantity') => {
+  if (type === 'pages') {
+    materialPages.value[idx] = (materialPages.value[idx] ?? 1) + 1;
+  } else {
+    const defaultVal = currentExam.value?.materials?.[idx]?.quantity ?? 1;
+    materialQuantities.value[idx] = (materialQuantities.value[idx] ?? defaultVal) + 1;
+  }
+};
+
+const decreaseMaterial = (idx: number, type: 'pages' | 'quantity') => {
+  if (type === 'pages') {
+    const current = materialPages.value[idx] ?? 1;
+    if (current > 0) materialPages.value[idx] = current - 1;
+  } else {
+    const defaultVal = currentExam.value?.materials?.[idx]?.quantity ?? 1;
+    const current = materialQuantities.value[idx] ?? defaultVal;
+    if (current > 0) materialQuantities.value[idx] = current - 1;
+  }
+};
+
+// === 考场号设置 ===
 const showRoomNumberModal = ref(false);
 const STORAGE_KEY = 'examaware:roomNumber';
 
@@ -634,18 +697,13 @@ const saveStoredRoomNumber = (val: string) => {
   } catch {}
 };
 
-// 内部房间号（用于本地持久化与无外部绑定时的显示）
 const localRoomNumber = ref<string>(props.roomNumber || loadStoredRoomNumber() || '01');
-
-// 对外生效的房间号（优先使用外部的 prop，否则使用内部本地值）
 const effectiveRoomNumber = computed<string>(() => props.roomNumber ?? localRoomNumber.value);
 
-// 弹窗里的临时值
 const tempRoomNumber = ref(effectiveRoomNumber.value);
 const keyboardRef = ref<HTMLElement>();
 let keyboardInstance: any = null;
 
-// 处理考场号点击
 const handleRoomNumberClick = () => {
   if (!props.allowEditRoomNumber) {
     emit('roomNumberClick');
@@ -655,30 +713,24 @@ const handleRoomNumberClick = () => {
   tempRoomNumber.value = effectiveRoomNumber.value || '01';
   showRoomNumberModal.value = true;
 
-  // 延迟初始化键盘，确保DOM已渲染
   setTimeout(() => {
     initKeyboard();
   }, 100);
 };
 
-// 键盘按键处理
 const onKeyPress = (button: string) => {
   if (button === '{clear}') {
     tempRoomNumber.value = '';
   } else if (button === '{bksp}') {
     tempRoomNumber.value = tempRoomNumber.value.slice(0, -1);
   } else {
-    // 限制只能输入数字和字母，最大长度10
     if (/^[0-9a-zA-Z]$/.test(button) && tempRoomNumber.value.length < 10) {
       tempRoomNumber.value += button;
     }
   }
 };
 
-// 初始化虚拟键盘
 const initKeyboard = () => {
-  // 动态导入 simple-keyboard
-  //  TODO: 已知这块会卡一下 不是很影响体验 先不改了 回头改
   import('simple-keyboard')
     .then(({ default: Keyboard }) => {
       if (keyboardRef.value && !keyboardInstance) {
@@ -703,7 +755,6 @@ const initKeyboard = () => {
     });
 };
 
-// 销毁虚拟键盘
 const destroyKeyboard = () => {
   if (keyboardInstance) {
     keyboardInstance.destroy();
@@ -711,14 +762,13 @@ const destroyKeyboard = () => {
   }
 };
 
-// 确认考场号设置
 const handleRoomNumberConfirm = () => {
   if (tempRoomNumber.value && tempRoomNumber.value.trim()) {
     const next = tempRoomNumber.value.trim();
     localRoomNumber.value = next;
     saveStoredRoomNumber(next);
-    emit('update:roomNumber', next); // v-model 支持
-    emit('roomNumberChange', next); // 兼容旧事件
+    emit('update:roomNumber', next);
+    emit('roomNumberChange', next);
     showRoomNumberModal.value = false;
     destroyKeyboard();
   } else {
@@ -726,31 +776,25 @@ const handleRoomNumberConfirm = () => {
   }
 };
 
-// 取消考场号设置
 const handleRoomNumberCancel = () => {
   showRoomNumberModal.value = false;
   tempRoomNumber.value = effectiveRoomNumber.value || '01';
   destroyKeyboard();
 };
 
-// 格式化的考试信息用于CurrentExamInfo组件 - 现在使用 examPlayer 的 formattedExamInfos
 const displayFormattedExamInfos = computed(() => {
   const formatted = formattedExamInfos.value || [];
   return formatted;
 });
 
-// pending 状态时不显示剩余时间
-// 没用的屎山 我现在不敢删
 const displayedRemainingTime = computed(() => {
   return examStatus.value?.status === 'pending' ? '' : remainingTime.value || '';
 });
 
-// 添加调试信息与本地存储同步
 onMounted(() => {
   console.log('ExamPlayer: mounted, props.examConfig:', props.examConfig);
   console.log('ExamPlayer: examPlayer state:', examPlayer.state.value);
   console.log('ExamPlayer: formattedExamInfos:', formattedExamInfos.value);
-  // 初次挂载时，如果本地存储有值且与外部不同，则同步给外部
   const stored = loadStoredRoomNumber();
   if (stored && stored !== props.roomNumber) {
     localRoomNumber.value = stored;
@@ -758,13 +802,11 @@ onMounted(() => {
     emit('roomNumberChange', stored);
   }
 
-  // 初次挂载后，根据当前状态弹一次彩色提醒
   setTimeout(() => {
     const status = examStatus.value?.status;
     if (status === 'inProgress') {
       reminder.showColorfulAlert({ title: '考试进行中', themeBaseColor: '#2ecc71' });
     } else if (status === 'pending') {
-      // 不打扰：未开始不弹，或按需提示“未开始”
     } else if (status === 'completed') {
       reminder.showColorfulAlert({ title: '考试已结束', themeBaseColor: '#ff3b30' });
     }
@@ -775,7 +817,6 @@ onMounted(() => {
 let autoScaleAnimationId: number | null = null;
 let currentAutoScale = 1;
 
-// 根据窗口宽度计算缩放比例
 const calculateAutoScale = () => {
   const w = window.innerWidth;
   if (w >= 1920) return 1.2;
@@ -784,14 +825,11 @@ const calculateAutoScale = () => {
   return 0.7;
 };
 
-// 缓动函数 - 使用 ease-out-cubic
-//  TODO: 这几次测试的时候感觉其实还是不是很好看 回来换一个
 const easeOutCubic = (t: number): number => {
   return 1 - Math.pow(1 - t, 3);
 };
 
 const setAutoRootScale = (scale: number) => {
-  // 同时设置到 documentElement 与组件根容器，确保 scoped 样式也能读取到
   document.documentElement.style.setProperty('--ui-scale', String(scale));
   if (rootRef.value) {
     rootRef.value.style.setProperty('--ui-scale', String(scale));
@@ -799,7 +837,6 @@ const setAutoRootScale = (scale: number) => {
   console.log('Auto-scale set to:', scale);
 };
 
-// 平滑动画到目标缩放值
 const animateToAutoScale = (target: number) => {
   if (autoScaleAnimationId) {
     cancelAnimationFrame(autoScaleAnimationId);
@@ -807,23 +844,18 @@ const animateToAutoScale = (target: number) => {
 
   const startScale = currentAutoScale;
   const startTime = performance.now();
-  const duration = 400; // 动画持续时间400ms
+  const duration = 400;
 
   const animate = (currentTime: number) => {
     const elapsed = currentTime - startTime;
     const progress = Math.min(elapsed / duration, 1);
-
-    // 应用缓动函数
     const easedProgress = easeOutCubic(progress);
-
-    // 计算当前缩放值
     const scale = startScale + (target - startScale) * easedProgress;
     currentAutoScale = scale;
     setAutoRootScale(scale);
 
     if (progress < 1) {
       autoScaleAnimationId = requestAnimationFrame(animate);
-      // 将动画ID暴露到window对象，以便ActionButtonBar可以停止它
       (window as any).autoScaleAnimationId = autoScaleAnimationId;
     } else {
       autoScaleAnimationId = null;
@@ -835,7 +867,6 @@ const animateToAutoScale = (target: number) => {
   (window as any).autoScaleAnimationId = autoScaleAnimationId;
 };
 
-// 处理窗口大小变化
 const handleAutoScaleResize = () => {
   const targetScale = calculateAutoScale();
   animateToAutoScale(targetScale);
@@ -851,32 +882,25 @@ const adjustTitleSize = () => {
   const container = mainTitleRef.value.parentElement;
   if (!container) return;
 
-  // 等待DOM更新完成再计算（避免布局抖动）
   setTimeout(() => {
     const containerWidth = container.clientWidth;
 
-    // 从一个较大的初始字体开始，逐步减小直到单行完全显示
-    let fontSize = 50; // px，初始值
+    let fontSize = 50;
     mainTitleRef.value!.style.fontSize = `${fontSize}px`;
-
-    // 强制重新计算布局
     void mainTitleRef.value!.offsetHeight;
 
     let scrollWidth = mainTitleRef.value!.scrollWidth;
 
-    // 逐步减小字体直到文字宽度不超过容器宽度
     while (scrollWidth > containerWidth && fontSize > 12) {
-      fontSize -= 0.5; // 小步长保证精度
+      fontSize -= 0.5;
       mainTitleRef.value!.style.fontSize = `${fontSize}px`;
       void mainTitleRef.value!.offsetHeight;
       scrollWidth = mainTitleRef.value!.scrollWidth;
     }
 
-    // 让标题留一点安全边距
     fontSize = Math.max(12, fontSize - 5);
     mainTitleRef.value!.style.fontSize = `${fontSize}px`;
 
-    // 副标题与主标题保持比例（约40%）
     const subtitleFontSize = fontSize * 0.4;
     subtitleRef.value!.style.fontSize = `${subtitleFontSize}px`;
   }, 10);
@@ -886,12 +910,10 @@ onMounted(() => {
   adjustTitleSize();
   window.addEventListener('resize', adjustTitleSize);
 
-  // 初始化 UI 自动缩放
   currentAutoScale = calculateAutoScale();
   setAutoRootScale(currentAutoScale);
   window.addEventListener('resize', handleAutoScaleResize);
 
-  // 监听UI缩放变化
   const observer = new MutationObserver(() => {
     adjustTitleSize();
   });
@@ -900,7 +922,6 @@ onMounted(() => {
     attributeFilter: ['style']
   });
 
-  // 清理函数在组件卸载时执行
   window.addEventListener('beforeunload', () => {
     observer.disconnect();
   });
@@ -910,13 +931,11 @@ onUnmounted(() => {
   window.removeEventListener('resize', adjustTitleSize);
   window.removeEventListener('resize', handleAutoScaleResize);
 
-  // 清理自动缩放动画
   if (autoScaleAnimationId) {
     cancelAnimationFrame(autoScaleAnimationId);
   }
 });
 
-// 当标题/副标题内容变化时，重新计算自适应字号
 watch(
   () => playerExamConfig?.value?.examName,
   () => adjustTitleSize()
@@ -926,7 +945,6 @@ watch(
   () => adjustTitleSize()
 );
 
-// 同步外部传入 roomNumber 的变化
 watch(
   () => props.roomNumber,
   (val) => {
@@ -937,32 +955,14 @@ watch(
   }
 );
 
-// === 可插拔卡片：在依赖都声明后注入 provide，并计算卡片组件 ===
-const ctxForCards = {
-  formattedCurrentTime,
-  timeSyncStatus: computed(() => props.timeSyncStatus),
-  currentExam,
-  currentExamName,
-  currentExamTimeRange,
-  displayedRemainingTime: computed(() =>
-    examStatus.value?.status === 'pending' ? '' : remainingTime.value || ''
-  ),
-  displayFormattedExamInfos,
-  effectiveRoomNumber,
-  uiDensity: densityState,
-  largeClockEnabled: computed(() => largeClockState.value),
-  largeClockScale: largeClockScaleState,
-  examInfoLargeFont: computed(() => examInfoLargeFontState.value),
-  handleRoomNumberClick
-};
-provide('ExamPlayerCtx', ctxForCards);
-
-const resolvedCards = computed(() => ({
-  clock: props.cards?.clock ?? ClockCard,
-  examInfo: props.cards?.examInfo ?? ExamInfoCard,
-  room: props.cards?.room ?? ExamRoomCard,
-  list: props.cards?.list ?? CurrentListCard
-}));
+// 监听考试变化，重置材料数量
+watch(
+  () => currentExam.value?.name,
+  () => {
+    materialPages.value = {};
+    materialQuantities.value = {};
+  }
+);
 </script>
 
 <style scoped>
@@ -976,7 +976,6 @@ const resolvedCards = computed(() => ({
   position: relative;
   overflow: hidden;
   background: #02080d;
-  /* 提供本地默认变量，防止未继承导致的变量缺失 */
   --ui-scale: 1;
   --density-scale: 1;
   --large-clock-scale: 1;
@@ -993,40 +992,47 @@ const resolvedCards = computed(() => ({
     rgba(55, 88, 255, 0.3) 0%,
     rgba(70, 82, 255, 0) 100%
   );
-
   border-radius: 50%;
   transform: translateX(-50%) translateY(-50%);
   z-index: 0;
 }
 
-.exam-room-container {
-  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
-  display: flex;
-  justify-content: flex-end; /* 右对齐 */
-}
-
-.logo-container {
+.content-wrapper {
   position: relative;
-  margin-bottom: calc((40px * 100vh / 1080px) * var(--ui-scale, 1) * var(--density-scale, 1));
-  z-index: 20;
+  z-index: 10;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1.5rem)
+    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem)
+    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 6rem)
+    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
+  gap: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1.5rem);
 }
 
-.logo-text {
-  color: #ffffff;
-  font-size: calc(var(--ui-scale, 1) * 1.25rem);
-  font-weight: 600;
-  letter-spacing: 0.025em;
+/* 顶部标题栏 */
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-shrink: 0;
 }
 
-.title-section {
-  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 3rem);
+.header-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.header-right {
+  flex-shrink: 0;
+  margin-left: calc(var(--ui-scale, 1) * 2rem);
 }
 
 .main-title {
   color: #ffffff;
   font-weight: 700;
   line-height: 1.2;
-  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1rem);
+  margin: 0 0 calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.5rem) 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1037,137 +1043,252 @@ const resolvedCards = computed(() => ({
   color: rgba(255, 255, 255, 0.7);
   font-weight: 400;
   line-height: 1.4;
+  margin: 0;
 }
 
-.clock-card {
-  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
-}
-
-.clock-content {
+/* 中间时钟区域 */
+.middle-section {
+  flex-shrink: 0;
   display: flex;
-  align-items: center;
-  gap: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
+  justify-content: center;
+}
+
+.clock-area {
+  background: rgba(4, 14, 21, 0.8);
+  border: 1px solid rgba(36, 47, 56, 0.6);
+  border-radius: calc(var(--ui-scale, 1) * 20px);
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem)
+    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 4rem);
+  text-align: center;
+  width: 66.67%;
+}
+
+.clock-label {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: calc(var(--ui-scale, 1) * 1.5rem);
+  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.5rem);
 }
 
 .time-display {
-  font-size: calc(var(--ui-scale, 1) * 4rem);
+  font-size: calc(var(--ui-scale, 1) * 5rem);
   line-height: 1;
   color: #fff;
   text-shadow: 0 calc(var(--ui-scale, 1) * 0.167rem) calc(var(--ui-scale, 1) * 1.458rem)
     rgba(255, 255, 255, 0.3);
   font-family: 'TCloudNumber', 'MiSans', monospace;
-  font-style: normal;
+  font-weight: 600;
+  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.75rem);
+}
+
+.countdown-display {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: calc(var(--ui-scale, 1) * 1.8rem);
+  font-weight: 500;
+}
+
+/* 底部区域 */
+.bottom-section {
+  flex: 1;
+  display: flex;
+  gap: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.bottom-left {
+  width: 40%;
+  min-width: 0;
+  overflow: auto;
+}
+
+.bottom-right {
+  width: 60%;
+  min-width: 0;
+  overflow: auto;
+}
+
+/* 当前考试信息卡片 */
+.current-exam-card :deep(.card-content) {
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1.5rem);
+}
+
+.current-exam-content {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1rem);
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ui-scale, 1) * 0.5rem);
+}
+
+.info-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: calc(var(--ui-scale, 1) * 1.4rem);
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.info-value {
+  color: #fff;
+  font-size: calc(var(--ui-scale, 1) * 1.4rem);
+  font-weight: 500;
+}
+
+.status-pending {
+  color: #e37318;
+}
+
+.status-ongoing {
+  color: #45a452;
+}
+
+.status-finished {
+  color: #c0c0c0;
+}
+
+/* 材料控制 */
+.materials-section {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.75rem);
+  margin-top: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.5rem);
+}
+
+.material-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ui-scale, 1) * 0.5rem);
+  flex-wrap: wrap;
+}
+
+.material-control {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ui-scale, 1) * 0.35rem);
+}
+
+.material-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: calc(var(--ui-scale, 1) * 1.2rem);
+}
+
+.number-box {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--ui-scale, 1) * 0.25rem);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: calc(var(--ui-scale, 1) * 6px);
+  padding: calc(var(--ui-scale, 1) * 0.25rem) calc(var(--ui-scale, 1) * 0.5rem);
+}
+
+.num-btn {
+  width: calc(var(--ui-scale, 1) * 1.5rem);
+  height: calc(var(--ui-scale, 1) * 1.5rem);
+  border: none;
+  border-radius: calc(var(--ui-scale, 1) * 4px);
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: calc(var(--ui-scale, 1) * 1rem);
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease;
+}
+
+.num-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.num-btn:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.num-value {
+  color: #fff;
+  font-size: calc(var(--ui-scale, 1) * 1.2rem);
+  font-weight: 600;
+  min-width: calc(var(--ui-scale, 1) * 1.5rem);
+  text-align: center;
+}
+
+/* 考试列表表格 */
+.exam-list-card :deep(.card-content) {
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1.5rem);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.exam-table-header {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1.5fr 1.5fr 1fr;
+  gap: calc(var(--ui-scale, 1) * 1rem);
+  padding-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.75rem);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.75rem);
+}
+
+.exam-table-header span {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: calc(var(--ui-scale, 1) * 1.2rem);
+  font-weight: 500;
+  text-align: center;
+}
+
+.exam-table-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.5rem);
+}
+
+.exam-table-row {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1.5fr 1.5fr 1fr;
+  gap: calc(var(--ui-scale, 1) * 1rem);
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.5rem) 0;
+  align-items: center;
+}
+
+.exam-table-row span {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: calc(var(--ui-scale, 1) * 1.2rem);
+  text-align: center;
+}
+
+.exam-active {
+  background: rgba(69, 164, 82, 0.15);
+  border-radius: calc(var(--ui-scale, 1) * 8px);
+}
+
+.status-completed {
+  color: #c0c0c0;
+}
+
+.status-inProgress {
+  color: #45a452;
   font-weight: 600;
 }
 
-.time-note {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: calc(var(--ui-scale, 1) * 1.5rem);
-  line-height: calc(var(--ui-scale, 1) * 2rem);
+.status-pending {
+  color: #e37318;
 }
 
-.exam-info-card {
-  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
-}
-
-.content-wrapper {
-  position: relative;
-  z-index: 10;
-  height: 100vh;
-  display: flex;
-  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem)
-    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem)
-    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 8rem)
-    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
-  gap: calc(100px * var(--ui-scale, 1) * var(--density-scale, 1));
-}
-
-.left-column {
-  width: 50%;
-  min-width: 0; /* 允许收缩 */
-  padding-top: calc((40px * 100vh / 1080px) * var(--ui-scale, 1) * var(--density-scale, 1));
-  overflow: hidden; /* 防止内容溢出 */
-}
-
-.right-column {
-  width: 50%;
-  min-width: 0; /* 允许收缩 */
-  padding-top: calc((40px * 100vh / 1080px) * var(--ui-scale, 1) * var(--density-scale, 1));
-  overflow: hidden; /* 防止内容溢出 */
-}
-
-/* 统一卡片间距（适配可插拔卡片） */
-.card-item {
-  margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem);
-}
-.card-item:last-child {
-  margin-bottom: 0;
+.empty-state {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: calc(var(--ui-scale, 1) * 1.2rem);
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem) 0;
 }
 
 /* 弹窗样式 */
-.room-number-modal .modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-}
-
-.room-number-modal .modal-content {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 480px;
-  max-width: calc(100vw - 32px);
-  background: #0b1220;
-  border: 1px solid #1f2a44;
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
-  z-index: 1001;
-  color: #fff;
-}
-
-.close-btn {
-  background: transparent;
-  border: none;
-  font-size: 20px;
-  color: #9aa4b2;
-  cursor: pointer;
-}
-
-.form-item label {
-  display: block;
-  margin-bottom: 8px;
-  color: #9aa4b2;
-}
-
-.room-input {
-  width: 100%;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid #1f2a44;
-  background: #0e1628;
-  color: #fff;
-  padding: 0 12px;
-}
-
-.btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  color: #fff;
-}
-
-.btn-cancel {
-  background: #1f2a44;
-}
-
-.btn-confirm {
-  background: #1668dc;
-}
-
-/* 键盘样式 */
 .keyboard-container {
   margin-top: 16px;
 }
@@ -1249,7 +1370,6 @@ const resolvedCards = computed(() => ({
   transform: scale(1.02);
 }
 
-/* 彩色提醒：全屏遮罩（可定制颜色） */
 .colorful-overlay {
   background: var(--colorful-bg, #ff3b30);
   background: color-mix(in srgb, var(--colorful-bg, #ff3b30) 85%, transparent);
@@ -1270,7 +1390,6 @@ const resolvedCards = computed(() => ({
   }
 }
 
-/* 普通通知：毛玻璃卡片 */
 .notice-overlay {
   backdrop-filter: blur(12px) saturate(1.1);
   background: rgba(0, 0, 0, 0.35);
