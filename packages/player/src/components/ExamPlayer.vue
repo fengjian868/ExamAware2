@@ -26,7 +26,8 @@
           <div class="clock-label">北京时间</div>
           <div class="time-display">{{ formattedCurrentTime }}</div>
           <div class="countdown-display">
-            <span v-if="examStatus?.status === 'pending'">考前倒计时 {{ remainingTime }}</span>
+            <span v-if="showPreExamCountdown">考前倒计时 {{ preExamCountdownText }}</span>
+            <span v-else-if="examStatus?.status === 'pending'">考试未开始</span>
             <span v-else-if="examStatus?.status === 'inProgress'"
               >考试倒计时 {{ remainingTime }}</span
             >
@@ -52,6 +53,12 @@
               <div class="info-row">
                 <span class="info-label">考试状态：</span>
                 <span class="info-value" :class="statusClass">{{ examStatusText }}</span>
+              </div>
+
+              <!-- 考前倒计时（在考前指定时间内显示） -->
+              <div v-if="showPreExamCountdown" class="info-row">
+                <span class="info-label">考前倒计时：</span>
+                <span class="info-value pre-exam-countdown">{{ preExamCountdownText }}</span>
               </div>
 
               <!-- 考试材料数量控制 -->
@@ -625,6 +632,36 @@ watch(
   { immediate: true }
 );
 
+// === 考前倒计时逻辑 ===
+const DEFAULT_PRE_EXAM_MINUTES = 15;
+const preExamCountdownMinutes = computed(() =>
+  Math.max(1, Math.min(120, props.config?.preExamCountdownMinutes ?? DEFAULT_PRE_EXAM_MINUTES))
+);
+
+const preExamCountdownMs = computed(() => preExamCountdownMinutes.value * 60 * 1000);
+
+const showPreExamCountdown = computed(() => {
+  if (!currentExam.value || examStatus.value?.status !== 'pending') return false;
+  const startTime = new Date(currentExam.value.start).getTime();
+  const now = examPlayer.currentTime.value;
+  const diff = startTime - now;
+  return diff > 0 && diff <= preExamCountdownMs.value;
+});
+
+const preExamCountdownText = computed(() => {
+  if (!currentExam.value) return '';
+  const startTime = new Date(currentExam.value.start).getTime();
+  const now = examPlayer.currentTime.value;
+  const diff = Math.max(0, startTime - now);
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+  const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+});
+
 // === 考试状态文本 ===
 const examStatusText = computed(() => {
   switch (examStatus.value?.status) {
@@ -1139,7 +1176,7 @@ watch(
 }
 
 .status-pending {
-  color: #e37318;
+  color: #888888;
 }
 
 .status-ongoing {
@@ -1147,7 +1184,23 @@ watch(
 }
 
 .status-finished {
-  color: #c0c0c0;
+  color: #ff3b30;
+}
+
+.pre-exam-countdown {
+  color: #f1c40f;
+  font-weight: 700;
+  animation: pre-exam-pulse 1s ease-in-out infinite;
+}
+
+@keyframes pre-exam-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* 材料控制 */
@@ -1269,7 +1322,7 @@ watch(
 }
 
 .status-completed {
-  color: #c0c0c0;
+  color: #ff3b30;
 }
 
 .status-inProgress {
@@ -1278,7 +1331,7 @@ watch(
 }
 
 .status-pending {
-  color: #e37318;
+  color: #888888;
 }
 
 .empty-state {

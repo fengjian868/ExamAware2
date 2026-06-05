@@ -14,6 +14,8 @@ export interface PlayerConfig {
   timeSync?: boolean;
   /** 自动刷新间隔（毫秒） */
   refreshInterval?: number;
+  /** 考前倒计时触发时间（分钟），默认15分钟 */
+  preExamCountdownMinutes?: number;
 }
 
 export interface PlayerState {
