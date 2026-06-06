@@ -1094,20 +1094,20 @@ watch(
   background: rgba(4, 14, 21, 0.8);
   border: 1px solid rgba(36, 47, 56, 0.6);
   border-radius: calc(var(--ui-scale, 1) * 20px);
-  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 2rem)
-    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 4rem);
+  padding: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 1.5rem)
+    calc(var(--ui-scale, 1) * var(--density-scale, 1) * 3rem);
   text-align: center;
-  width: 66.67%;
+  width: 55%;
 }
 
 .clock-label {
   color: rgba(255, 255, 255, 0.6);
-  font-size: calc(var(--ui-scale, 1) * 1.5rem);
+  font-size: calc(var(--ui-scale, 1) * 1.8rem);
   margin-bottom: calc(var(--ui-scale, 1) * var(--density-scale, 1) * 0.5rem);
 }
 
 .time-display {
-  font-size: calc(var(--ui-scale, 1) * 5rem);
+  font-size: calc(var(--ui-scale, 1) * 7rem);
   line-height: 1;
   color: #fff;
   text-shadow: 0 calc(var(--ui-scale, 1) * 0.167rem) calc(var(--ui-scale, 1) * 1.458rem)
@@ -1119,7 +1119,7 @@ watch(
 
 .countdown-display {
   color: rgba(255, 255, 255, 0.85);
-  font-size: calc(var(--ui-scale, 1) * 1.8rem);
+  font-size: calc(var(--ui-scale, 1) * 2rem);
   font-weight: 500;
 }
 
@@ -1133,13 +1133,13 @@ watch(
 }
 
 .bottom-left {
-  width: 40%;
+  width: 45%;
   min-width: 0;
   overflow: auto;
 }
 
 .bottom-right {
-  width: 60%;
+  width: 55%;
   min-width: 0;
   overflow: auto;
 }
