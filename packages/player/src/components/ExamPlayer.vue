@@ -131,6 +131,7 @@
       :initial-large-clock-enabled="largeClockState"
       :initial-large-clock-scale="largeClockScaleState"
       :initial-exam-info-large-font="examInfoLargeFontState"
+      :initial-pre-exam-countdown="preExamCountdownState"
       :extra-tools="toolbarTools"
       @exit="emit('exit')"
       @scale-change="emit('scaleChange', $event)"
@@ -138,6 +139,7 @@
       @large-clock-toggle="handleLargeClockToggle"
       @clock-scale-change="handleLargeClockScaleChange"
       @exam-info-large-font-toggle="handleExamInfoLargeFontToggle"
+      @pre-exam-countdown-change="handlePreExamCountdownChange"
       @dev-reminder-test="handleDevReminderTest"
       @dev-reminder-hide="handleDevReminderHide"
     />
@@ -363,6 +365,8 @@ const largeClockScaleState = ref<number>(resolveInitialLargeClockScale());
 
 const examInfoLargeFontState = ref<boolean>(Boolean(props.examInfoLargeFont));
 
+const preExamCountdownState = ref<number>(props.config?.preExamCountdownMinutes ?? 15);
+
 watch(
   () => props.largeClockScale,
   (value) => {
@@ -497,6 +501,11 @@ const handleExamInfoLargeFontToggle = (enabled: boolean) => {
   examInfoLargeFontState.value = flag;
   emit('update:examInfoLargeFont', flag);
   emit('examInfoLargeFontToggle', flag);
+};
+
+const handlePreExamCountdownChange = (minutes: number) => {
+  const safe = Math.max(1, Math.min(60, minutes));
+  preExamCountdownState.value = safe;
 };
 
 watch(
@@ -635,7 +644,7 @@ watch(
 // === 考前倒计时逻辑 ===
 const DEFAULT_PRE_EXAM_MINUTES = 15;
 const preExamCountdownMinutes = computed(() =>
-  Math.max(1, Math.min(120, props.config?.preExamCountdownMinutes ?? DEFAULT_PRE_EXAM_MINUTES))
+  Math.max(1, Math.min(60, preExamCountdownState.value ?? props.config?.preExamCountdownMinutes ?? DEFAULT_PRE_EXAM_MINUTES))
 );
 
 const preExamCountdownMs = computed(() => preExamCountdownMinutes.value * 60 * 1000);
@@ -1107,7 +1116,7 @@ watch(
 }
 
 .time-display {
-  font-size: calc(var(--ui-scale, 1) * 7rem);
+  font-size: calc(var(--ui-scale, 1) * var(--large-clock-scale, 1) * 7rem);
   line-height: 1;
   color: #fff;
   text-shadow: 0 calc(var(--ui-scale, 1) * 0.167rem) calc(var(--ui-scale, 1) * 1.458rem)

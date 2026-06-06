@@ -78,6 +78,21 @@
             <div class="settings-hint">放大“当前考试信息”卡片内的字段字号，提升远距离可读性</div>
           </div>
         </div>
+        <div class="settings-group">
+          <div class="settings-label">考前倒计时时间</div>
+          <div class="settings-control">
+            <div class="slider-row">
+              <t-slider
+                v-model:value="preExamCountdownModel"
+                :min="1"
+                :max="60"
+                :step="1"
+                :input-number-props="{ theme: 'column', suffix: '分钟' }"
+              />
+            </div>
+            <div class="settings-hint">设置考前多久开始显示倒计时（1-60分钟）</div>
+          </div>
+        </div>
         <div v-if="isDevMode" class="settings-group dev-reminder-tools">
           <div class="settings-label">调试 · 全屏提醒</div>
           <div class="settings-control">
@@ -134,12 +149,14 @@ const props = withDefaults(
     largeClockEnabled: boolean;
     largeClockScale: number;
     examInfoLargeFont: boolean;
+    preExamCountdown: number;
     formatScale: (value: number | string) => string;
     isDevMode?: boolean;
   }>(),
   {
     isDevMode: false,
-    examInfoLargeFont: false
+    examInfoLargeFont: false,
+    preExamCountdown: 15
   }
 );
 
@@ -150,6 +167,7 @@ const emit = defineEmits<{
   (e: 'update:largeClockEnabled', value: boolean): void;
   (e: 'update:largeClockScale', value: number): void;
   (e: 'update:examInfoLargeFont', value: boolean): void;
+  (e: 'update:preExamCountdown', value: number): void;
   (e: 'confirm'): void;
   (e: 'close'): void;
   (e: 'devReminderTest', preset: DevReminderPreset): void;
@@ -181,6 +199,11 @@ const largeClockScaleModel = computed({
 const examInfoLargeFontModel = computed({
   get: () => props.examInfoLargeFont,
   set: (value: boolean) => emit('update:examInfoLargeFont', value)
+});
+
+const preExamCountdownModel = computed({
+  get: () => props.preExamCountdown,
+  set: (value: number) => emit('update:preExamCountdown', value)
 });
 
 const handleVisibleChange = (value: boolean) => {
